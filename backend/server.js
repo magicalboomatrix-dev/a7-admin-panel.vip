@@ -12,10 +12,7 @@ const groupRoutes = require("./routes/groupRoutes");
 const adRoutes = require("./routes/adRoutes")
 const contactRoute = require("./routes/contactRoute.js");
 const chartUploadRoutes = require("./routes/chartUploadRoutes");
-
-
-
-
+const seoRoutes = require("./routes/seoRoutes");
 
 dotenv.config();
 connectDB();
@@ -26,6 +23,12 @@ const allowedOrigins = [
   "https://admin.a7satta.vip",
   "https://a7satta.vip",
   "https://www.a7satta.vip",
+  "https://www.a3satta.vip",
+  "https://www.a1satta.vip",
+  "https://www.b7satta.vip",
+"https://a3satta.vip",
+  "https://a1satta.vip",
+  "https://b7satta.vip",
   "http://localhost:5173"
 ];
 
@@ -66,6 +69,9 @@ app.use("/api/ads", adRoutes);
 app.use("/api/contact", contactRoute);
 
 app.use("/api/chart", chartUploadRoutes);
+
+app.use("/api/seo", seoRoutes);
+
 
 
 

@@ -1,15 +1,31 @@
 const express = require("express");
-const { getAds, saveAds, deleteAd } = require("../controllers/adController.js");
+const {
+  getAds,
+  saveAds,
+  updateAd,
+  deleteAd
+} = require("../controllers/adController.js");
 
 const router = express.Router();
 
-// Get all ads
+// =========================
+// GET ads (optionally by position)
+// =========================
 router.get("/", getAds);
 
-// Save/update ads
+// =========================
+// BULK save / update ads
+// =========================
 router.post("/", saveAds);
 
-// Delete ONE ad by ID
+// =========================
+// UPDATE single ad by ID
+// =========================
+router.put("/:id", updateAd);
+
+// =========================
+// DELETE single ad by ID
+// =========================
 router.delete("/:id", deleteAd);
 
 module.exports = router;

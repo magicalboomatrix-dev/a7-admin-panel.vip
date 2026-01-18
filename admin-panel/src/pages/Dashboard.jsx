@@ -8,6 +8,7 @@ export default function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Mobile state
   const navigate = useNavigate();
   const location = useLocation();
+  const role = localStorage.getItem("role");
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -31,10 +32,12 @@ export default function Dashboard() {
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
     navigate("/login");
   };
 
-  const sidebarLinks = [
+  // Sidebar links for admin only
+  const adminSidebarLinks = [
     { name: "Game", icon: <Lucide.Home size={20} />, path: "/dashboard/game" },
     {
       name: "ManageChart",
@@ -66,7 +69,23 @@ export default function Dashboard() {
       icon: <Lucide.Settings size={20} />,
       path: "/dashboard/settings",
     },
+    {
+      name: "Manage SEO",
+      icon: <Lucide.Globe size={20} />,
+      path: "/dashboard/manageseo",
+    },
   ];
+
+  // Sidebar links for result-manager only
+  const resultManagerSidebarLinks = [
+    {
+      name: "ManageResults",
+      icon: <Lucide.Users size={20} />,
+      path: "/result-manager/manageresults",
+    },
+  ];
+
+  const sidebarLinks = role === "admin" ? adminSidebarLinks : resultManagerSidebarLinks;
 
   return (
     <div className="flex h-screen font-sans bg-gray-100 overflow-hidden">

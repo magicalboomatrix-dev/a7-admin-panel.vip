@@ -1,3 +1,12 @@
+// Middleware to check user role
+exports.authorizeRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ message: "Forbidden: insufficient permissions" });
+    }
+    next();
+  };
+};
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 

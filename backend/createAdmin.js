@@ -15,8 +15,8 @@ const createAdmin = async () => {
     }
 
     const admin = await User.create({
-      email: "admin@example.com",
-      password: "admin123", // You can change this password
+      email: "admin@a1satta.pro",
+      password: "admin123",
     });
 
     console.log("Admin user created successfully!");

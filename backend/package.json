@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "a1sattapro",
   "version": "1.0.0",
   "description": "Admin panel backend with Express and MongoDB",
   "main": "server.js",

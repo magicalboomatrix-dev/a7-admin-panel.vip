@@ -18,7 +18,12 @@ export default function Login() {
     try {
       const { data } = await api.post("/auth/login", { email, password });
       localStorage.setItem("token", data.token);
-      navigate("/dashboard/game");
+      localStorage.setItem("role", data.role);
+      if (data.role === "result-manager") {
+        navigate("/result-manager/manageresults");
+      } else {
+        navigate("/dashboard/game");
+      }
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
     }

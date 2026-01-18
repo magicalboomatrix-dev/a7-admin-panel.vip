@@ -1,3 +1,5 @@
+
+import ManageSEO from "./pages/ManageSEO";
 import {
   BrowserRouter as Router,
   Routes,
@@ -29,10 +31,12 @@ function App() {
           <Route path="/login" element={<Login />} />
 
           {/* Protected Routes */}
+
+          {/* Dashboard for admin: all pages including ManageResults */}
           <Route
             path="/dashboard/*"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["admin"]}>
                 <Dashboard />
               </ProtectedRoute>
             }
@@ -40,11 +44,25 @@ function App() {
             <Route index element={<Game />} />
             <Route path="game" element={<Game />} />
             <Route path="managechart" element={<ManageChart />} />
-            <Route path="manageresults" element={<ManageResults />} />
             <Route path="group" element={<Group />} />
             <Route path="custom" element={<CustomAds />} />
             <Route path="contact" element={<Contact />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="manageresults" element={<ManageResults />} />
+            <Route path="manageseo" element={<ManageSEO />} />
+          </Route>
+
+          {/* Only result-manager: redirect to manageresults directly */}
+          <Route
+            path="/result-manager/*"
+            element={
+              <ProtectedRoute allowedRoles={["result-manager"]}>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="manageresults" element={<ManageResults />} />
+            <Route path="*" element={<Navigate to="/result-manager/manageresults" replace />} />
           </Route>
 
           {/* Default redirect */}
