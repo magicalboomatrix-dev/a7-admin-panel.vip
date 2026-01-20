@@ -2,6 +2,14 @@ const mongoose = require("mongoose");
 
 const AdSchema = new mongoose.Schema(
   {
+    site: {
+      type: String,
+      default: "a7satta.vip", // allow per-domain ads like SEO
+      index: true,
+      trim: true,
+      lowercase: true,
+    },
+
     content: {
       type: String,
       default: "",
@@ -29,7 +37,8 @@ const AdSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Compound index for blazing fast queries
+// Compound indexes for faster per-site queries
+AdSchema.index({ site: 1, position: 1, order: 1 });
 AdSchema.index({ position: 1, order: 1 });
 
 module.exports = mongoose.model("Ad", AdSchema);

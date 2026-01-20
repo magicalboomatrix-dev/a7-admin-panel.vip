@@ -32,11 +32,19 @@ import {
   MdNumbers,
 } from "react-icons/md";
 
+const siteOptions = [
+  { label: "A1 Satta", value: "a1satta.vip" },
+  { label: "A3 Satta", value: "a3satta.vip" },
+  { label: "A7 Satta", value: "a7satta.vip" },
+  { label: "B7 Satta", value: "b7satta.vip" },
+];
+
 export default function PremiumAdsEditor() {
   const [ads, setAds] = useState({ top: [], middle: [], bottom: [] });
   const [activeSection, setActiveSection] = useState("top");
   const [isSaving, setIsSaving] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [site, setSite] = useState(siteOptions[0].value);
   const editorsRef = useRef({});
 
   // Normalize backend ad object to always have `id` (from _id or id)
@@ -50,7 +58,7 @@ export default function PremiumAdsEditor() {
   useEffect(() => {
     async function fetchAds() {
       try {
-        const res = await api.get("/ads");
+        const res = await api.get(`/ads?site=${encodeURIComponent(site)}`);
         const data = res.data;
         if (Array.isArray(data)) {
           const normalized = normalizeAdsFromServer(data);
@@ -69,10 +77,11 @@ export default function PremiumAdsEditor() {
         }
       } catch (err) {
         console.error(err);
+        setAds({ top: [], middle: [], bottom: [] });
       }
     }
     fetchAds();
-  }, []);
+  }, [site]);
 
   // Keep editorsRef clean
   useEffect(() => {
@@ -102,6 +111,7 @@ export default function PremiumAdsEditor() {
           content: "",
           position,
           order: prev[position].length,
+          site,
         },
       ],
     }));
@@ -157,6 +167,7 @@ export default function PremiumAdsEditor() {
           content: contentFromEditor,
           position,
           order: idx,
+          site,
         };
       });
 
@@ -169,7 +180,7 @@ export default function PremiumAdsEditor() {
         return;
       }
 
-      const res = await api.post("/ads", sectionAds);
+      const res = await api.post(`/ads?site=${encodeURIComponent(site)}`, sectionAds);
       const data = res.data ?? {};
 
       if (Array.isArray(data.ads)) {
@@ -204,6 +215,24 @@ export default function PremiumAdsEditor() {
     }
   };
 
+  // Generate WhatsApp or Telegram link from number/username
+  const generateContactLink = () => {
+    const platform = prompt("Select platform: (1) WhatsApp or (2) Telegram");
+    if (!platform || !["1", "2"].includes(platform)) return null;
+
+    if (platform === "1") {
+      // WhatsApp
+      const number = prompt("Enter WhatsApp number (with country code, e.g., 911234567890):");
+      if (!number || number.trim() === "") return null;
+      return `https://wa.me/${number.replace(/[^\d]/g, "")}`;
+    } else {
+      // Telegram
+      const username = prompt("Enter Telegram username (without @):");
+      if (!username || username.trim() === "") return null;
+      return `https://t.me/${username.trim()}`;
+    }
+  };
+
   const resizeLastImage = (adIdentifier, width) => {
     const editor = editorsRef.current[adIdentifier];
     if (!editor) return;
@@ -223,7 +252,12 @@ export default function PremiumAdsEditor() {
       const editor = editorsRef.current[adIdentifier];
       if (!editor) return;
 
-      const link = prompt("Enter link URL for this image (optional):");
+      const addLink = prompt("Add link to this image? (y/n)");
+      let link = null;
+      if (addLink && addLink.toLowerCase() === "y") {
+        link = generateContactLink();
+      }
+
       const imgHTML = `<img src="${e.target.result}" 
                           style="width:200px;height:auto;max-width:none;border-radius:4px;" 
                           draggable="false" />`;
@@ -423,7 +457,7 @@ export default function PremiumAdsEditor() {
                                 icon={FiLink}
                                 label="Link"
                                 onClick={() => {
-                                  const url = prompt("Enter link URL:");
+                                  const url = generateContactLink();
                                   if (url)
                                     execCommand(safeId, "createLink", url);
                                 }}
@@ -537,6 +571,20 @@ export default function PremiumAdsEditor() {
           </div>
 
           <div className="flex items-center space-x-3">
+            <select
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              value={site}
+              onChange={(e) => {
+                setSite(e.target.value);
+                setAds({ top: [], middle: [], bottom: [] });
+              }}
+            >
+              {siteOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label} ({opt.value})
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => setPreviewMode(!previewMode)}
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
