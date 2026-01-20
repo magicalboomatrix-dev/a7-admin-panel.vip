@@ -264,13 +264,42 @@ export default function PremiumAdsEditor() {
     }
   };
 
+  // Store selection/range when modal might steal focus
+  let savedSelection = null;
+
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      savedSelection = selection.getRangeAt(0);
+      return true;
+    }
+    return false;
+  };
+
+  const restoreSelection = () => {
+    if (savedSelection) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(savedSelection);
+    }
+  };
+
   // Generate WhatsApp or Telegram link from number/username
-  const generateContactLink = (callback) => {
+  const generateContactLink = (callback, adIdentifier) => {
+    // Save the current selection before modal opens
+    saveSelection();
+    
     showModal("platform", "Select Contact Platform", "Choose platform: (1) WhatsApp or (2) Telegram", (platform) => {
       if (platform === "1") {
         showModal("phone", "WhatsApp Number", "Enter WhatsApp number (with country code, e.g., 911234567890):", (number) => {
           if (number && number.trim() !== "") {
             const link = `https://wa.me/${number.replace(/[^\d]/g, "")}`;
+            // Restore selection before executing command
+            restoreSelection();
+            if (adIdentifier) {
+              const editor = editorsRef.current[adIdentifier];
+              if (editor) editor.focus();
+            }
             callback(link);
           }
         });
@@ -278,6 +307,12 @@ export default function PremiumAdsEditor() {
         showModal("username", "Telegram Username", "Enter Telegram username (without @):", (username) => {
           if (username && username.trim() !== "") {
             const link = `https://t.me/${username.trim()}`;
+            // Restore selection before executing command
+            restoreSelection();
+            if (adIdentifier) {
+              const editor = editorsRef.current[adIdentifier];
+              if (editor) editor.focus();
+            }
             callback(link);
           }
         });
@@ -313,7 +348,7 @@ export default function PremiumAdsEditor() {
           generateContactLink((generatedLink) => {
             link = generatedLink;
             insertImageWithLink(editor, e.target.result, link);
-          });
+          }, adIdentifier);
         } else {
           insertImageWithLink(editor, e.target.result, null);
         }
@@ -521,7 +556,7 @@ export default function PremiumAdsEditor() {
                                 onClick={() => {
                                   generateContactLink((url) => {
                                     if (url) execCommand(safeId, "createLink", url);
-                                  });
+                                  }, safeId);
                                 }}
                               />
                               <ToolbarButton
@@ -945,7 +980,6 @@ export default function PremiumAdsEditor() {
                       <button
                         onClick={() => {
                           if (modalCallback) modalCallback("1");
-                          closeModal();
                         }}
                         className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                       >
@@ -954,7 +988,6 @@ export default function PremiumAdsEditor() {
                       <button
                         onClick={() => {
                           if (modalCallback) modalCallback("2");
-                          closeModal();
                         }}
                         className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
