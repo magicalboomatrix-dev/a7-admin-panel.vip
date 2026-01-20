@@ -47,6 +47,37 @@ export default function PremiumAdsEditor() {
   const [site, setSite] = useState(siteOptions[0].value);
   const editorsRef = useRef({});
 
+  // Modal states
+  const [modalType, setModalType] = useState(null); // 'platform', 'phone', 'username', 'addLink', 'emoji', 'color', 'message'
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalInput, setModalInput] = useState("");
+  const [modalCallback, setModalCallback] = useState(null);
+  const [modalTitle, setModalTitle] = useState("");
+
+  // Modal helpers
+  const showModal = (type, title, message, callback = null) => {
+    setModalType(type);
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalInput("");
+    setModalCallback(() => callback);
+  };
+
+  const closeModal = () => {
+    setModalType(null);
+    setModalTitle("");
+    setModalMessage("");
+    setModalInput("");
+    setModalCallback(null);
+  };
+
+  const handleModalSubmit = () => {
+    if (modalCallback) {
+      modalCallback(modalInput);
+    }
+    closeModal();
+  };
+
   // Normalize backend ad object to always have `id` (from _id or id)
   const normalizeAdsFromServer = (arr) =>
     arr.map((a) => {
@@ -133,8 +164,14 @@ export default function PremiumAdsEditor() {
       return;
     }
 
-    if (!confirm("Delete this ad permanently from database?")) return;
+    showModal("confirm", "Delete Ad", "Delete this ad permanently from database?", (confirmed) => {
+      if (confirmed === "yes") {
+        handleDeleteAd(id, position);
+      }
+    });
+  };
 
+  const handleDeleteAd = async (id, position) => {
     try {
       await api.delete(`/ads/${id}`);
       setAds((prev) => ({
@@ -142,10 +179,10 @@ export default function PremiumAdsEditor() {
         [position]: prev[position].filter((ad) => ad.id !== id),
       }));
       delete editorsRef.current[id];
-      alert("Ad deleted successfully!");
+      showModal("message", "Success", "Ad deleted successfully!");
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete ad.");
+      showModal("message", "Error", "Failed to delete ad.");
     }
   };
 
@@ -175,11 +212,27 @@ export default function PremiumAdsEditor() {
         (s) => !s.content || s.content.trim() === ""
       );
 
-      if (allEmpty && !confirm(`${position} ads are empty. Save anyway?`)) {
-        setIsSaving(false);
+      if (allEmpty) {
+        showModal("confirm", "Empty Ads", `${position} ads are empty. Save anyway?`, (confirmed) => {
+          if (confirmed === "yes") {
+            performSave(sectionAds, position);
+          } else {
+            setIsSaving(false);
+          }
+        });
         return;
       }
 
+      performSave(sectionAds, position);
+    } catch (err) {
+      console.error("Save error:", err);
+      showModal("message", "Error", "Error saving ads.");
+      setIsSaving(false);
+    }
+  };
+
+  const performSave = async (sectionAds, position) => {
+    try {
       const res = await api.post(`/ads?site=${encodeURIComponent(site)}`, sectionAds);
       const data = res.data ?? {};
 
@@ -193,15 +246,11 @@ export default function PremiumAdsEditor() {
             .sort((a, b) => a.order - b.order),
         }));
 
-        alert(
-          `${
-            position.charAt(0).toUpperCase() + position.slice(1)
-          } ads saved successfully!`
-        );
+        showModal("message", "Success", `${position.charAt(0).toUpperCase() + position.slice(1)} ads saved successfully!`);
       }
     } catch (err) {
       console.error("Save error:", err);
-      alert("Error saving ads.");
+      showModal("message", "Error", "Error saving ads.");
     } finally {
       setIsSaving(false);
     }
@@ -216,21 +265,24 @@ export default function PremiumAdsEditor() {
   };
 
   // Generate WhatsApp or Telegram link from number/username
-  const generateContactLink = () => {
-    const platform = prompt("Select platform: (1) WhatsApp or (2) Telegram");
-    if (!platform || !["1", "2"].includes(platform)) return null;
-
-    if (platform === "1") {
-      // WhatsApp
-      const number = prompt("Enter WhatsApp number (with country code, e.g., 911234567890):");
-      if (!number || number.trim() === "") return null;
-      return `https://wa.me/${number.replace(/[^\d]/g, "")}`;
-    } else {
-      // Telegram
-      const username = prompt("Enter Telegram username (without @):");
-      if (!username || username.trim() === "") return null;
-      return `https://t.me/${username.trim()}`;
-    }
+  const generateContactLink = (callback) => {
+    showModal("platform", "Select Contact Platform", "Choose platform: (1) WhatsApp or (2) Telegram", (platform) => {
+      if (platform === "1") {
+        showModal("phone", "WhatsApp Number", "Enter WhatsApp number (with country code, e.g., 911234567890):", (number) => {
+          if (number && number.trim() !== "") {
+            const link = `https://wa.me/${number.replace(/[^\d]/g, "")}`;
+            callback(link);
+          }
+        });
+      } else if (platform === "2") {
+        showModal("username", "Telegram Username", "Enter Telegram username (without @):", (username) => {
+          if (username && username.trim() !== "") {
+            const link = `https://t.me/${username.trim()}`;
+            callback(link);
+          }
+        });
+      }
+    });
   };
 
   const resizeLastImage = (adIdentifier, width) => {
@@ -238,7 +290,10 @@ export default function PremiumAdsEditor() {
     if (!editor) return;
 
     const images = editor.getElementsByTagName("img");
-    if (images.length === 0) return alert("No image to resize");
+    if (images.length === 0) {
+      showModal("message", "No Image", "No image to resize");
+      return;
+    }
 
     const img = images[images.length - 1];
     img.style.width = `${width}px`;
@@ -252,29 +307,37 @@ export default function PremiumAdsEditor() {
       const editor = editorsRef.current[adIdentifier];
       if (!editor) return;
 
-      const addLink = prompt("Add link to this image? (y/n)");
-      let link = null;
-      if (addLink && addLink.toLowerCase() === "y") {
-        link = generateContactLink();
-      }
-
-      const imgHTML = `<img src="${e.target.result}" 
-                          style="width:200px;height:auto;max-width:none;border-radius:4px;" 
-                          draggable="false" />`;
-
-      editor.focus();
-
-      if (link) {
-        document.execCommand(
-          "insertHTML",
-          false,
-          `<a href="${link}" target="_blank">${imgHTML}</a>`
-        );
-      } else {
-        document.execCommand("insertHTML", false, imgHTML);
-      }
+      showModal("confirm", "Add Link", "Add link to this image?", (confirmed) => {
+        let link = null;
+        if (confirmed === "yes") {
+          generateContactLink((generatedLink) => {
+            link = generatedLink;
+            insertImageWithLink(editor, e.target.result, link);
+          });
+        } else {
+          insertImageWithLink(editor, e.target.result, null);
+        }
+      });
     };
     reader.readAsDataURL(file);
+  };
+
+  const insertImageWithLink = (editor, imageSrc, link) => {
+    const imgHTML = `<img src="${imageSrc}" 
+                        style="width:200px;height:auto;max-width:none;border-radius:4px;" 
+                        draggable="false" />`;
+
+    editor.focus();
+
+    if (link) {
+      document.execCommand(
+        "insertHTML",
+        false,
+        `<a href="${link}" target="_blank">${imgHTML}</a>`
+      );
+    } else {
+      document.execCommand("insertHTML", false, imgHTML);
+    }
   };
 
   const onDragEnd = (result, position) => {
@@ -428,38 +491,37 @@ export default function PremiumAdsEditor() {
                                 icon={MdFormatColorText}
                                 label="Color"
                                 onClick={() => {
-                                  const color = prompt(
-                                    "Enter text color (name or hex):"
-                                  );
-                                  if (color)
-                                    execCommand(safeId, "foreColor", color);
+                                  showModal("color", "Text Color", "Enter text color (name or hex):", (color) => {
+                                    if (color) execCommand(safeId, "foreColor", color);
+                                  });
                                 }}
                               />
                               <ToolbarButton
                                 icon={MdEmojiEmotions}
                                 label="Emoji"
                                 onClick={() => {
-                                  const emoji = prompt("Enter emoji:");
-                                  if (emoji) {
-                                    const editor = editorsRef.current[safeId];
-                                    if (editor) {
-                                      editor.focus();
-                                      document.execCommand(
-                                        "insertText",
-                                        false,
-                                        emoji
-                                      );
+                                  showModal("emoji", "Add Emoji", "Enter emoji:", (emoji) => {
+                                    if (emoji) {
+                                      const editor = editorsRef.current[safeId];
+                                      if (editor) {
+                                        editor.focus();
+                                        document.execCommand(
+                                          "insertText",
+                                          false,
+                                          emoji
+                                        );
+                                      }
                                     }
-                                  }
+                                  });
                                 }}
                               />
                               <ToolbarButton
                                 icon={FiLink}
                                 label="Link"
                                 onClick={() => {
-                                  const url = generateContactLink();
-                                  if (url)
-                                    execCommand(safeId, "createLink", url);
+                                  generateContactLink((url) => {
+                                    if (url) execCommand(safeId, "createLink", url);
+                                  });
                                 }}
                               />
                               <ToolbarButton
@@ -747,10 +809,13 @@ export default function PremiumAdsEditor() {
 
             <button
               onClick={() => {
-                const position = prompt("Enter section (top/middle/bottom):");
-                if (["top", "middle", "bottom"].includes(position)) {
-                  addAd(position);
-                }
+                showModal("section", "Add Ad", "Enter section (top/middle/bottom):", (position) => {
+                  if (["top", "middle", "bottom"].includes(position)) {
+                    addAd(position);
+                  } else {
+                    showModal("message", "Invalid Section", "Please enter: top, middle, or bottom");
+                  }
+                });
               }}
               className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
             >
@@ -816,6 +881,122 @@ export default function PremiumAdsEditor() {
           background: #a1a1a1;
         }
       `}</style>
+
+      {/* Modal Component */}
+      {modalType && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-lg font-bold text-gray-900">{modalTitle}</h2>
+              <button
+                onClick={closeModal}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FiX className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {modalType === "message" && (
+                <div>
+                  <p className="text-gray-700 mb-6">{modalMessage}</p>
+                  <button
+                    onClick={closeModal}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    OK
+                  </button>
+                </div>
+              )}
+
+              {modalType === "confirm" && (
+                <div>
+                  <p className="text-gray-700 mb-6">{modalMessage}</p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        if (modalCallback) modalCallback("yes");
+                        closeModal();
+                      }}
+                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (modalCallback) modalCallback("no");
+                        closeModal();
+                      }}
+                      className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                    >
+                      No
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(modalType === "platform" || modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section") && (
+                <div>
+                  <p className="text-gray-700 mb-4">{modalMessage}</p>
+                  {modalType === "platform" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (modalCallback) modalCallback("1");
+                          closeModal();
+                        }}
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        WhatsApp (1)
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (modalCallback) modalCallback("2");
+                          closeModal();
+                        }}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Telegram (2)
+                      </button>
+                    </div>
+                  )}
+                  {(modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section") && (
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={modalInput}
+                        onChange={(e) => setModalInput(e.target.value)}
+                        placeholder={modalMessage}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") handleModalSubmit();
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleModalSubmit}
+                          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          OK
+                        </button>
+                        <button
+                          onClick={closeModal}
+                          className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
