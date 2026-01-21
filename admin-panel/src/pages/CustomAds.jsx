@@ -46,6 +46,8 @@ export default function PremiumAdsEditor() {
   const [previewMode, setPreviewMode] = useState(false);
   const [site, setSite] = useState(siteOptions[0].value);
   const editorsRef = useRef({});
+  const savedSelectionRef = useRef(null);
+
 
   // Modal states
   const [modalType, setModalType] = useState(null); // 'platform', 'phone', 'username', 'addLink', 'emoji', 'color', 'message'
@@ -265,24 +267,24 @@ export default function PremiumAdsEditor() {
   };
 
   // Store selection/range when modal might steal focus
-  let savedSelection = null;
+const saveSelection = () => {
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0) {
+    savedSelectionRef.current = selection.getRangeAt(0);
+    return true;
+  }
+  return false;
+};
 
-  const saveSelection = () => {
+const restoreSelection = () => {
+  const range = savedSelectionRef.current;
+  if (range) {
     const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
-      savedSelection = selection.getRangeAt(0);
-      return true;
-    }
-    return false;
-  };
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+};
 
-  const restoreSelection = () => {
-    if (savedSelection) {
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(savedSelection);
-    }
-  };
 
   // Generate WhatsApp or Telegram link from number/username
  const generateContactLink = (callback, adIdentifier) => {
