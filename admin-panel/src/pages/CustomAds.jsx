@@ -285,40 +285,68 @@ export default function PremiumAdsEditor() {
   };
 
   // Generate WhatsApp or Telegram link from number/username
-  const generateContactLink = (callback, adIdentifier) => {
-    // Save the current selection before modal opens
-    saveSelection();
-    
-    showModal("platform", "Select Contact Platform", "Choose platform: (1) WhatsApp or (2) Telegram", (platform) => {
+ const generateContactLink = (callback, adIdentifier) => {
+  saveSelection();
+
+  showModal(
+    "platform",
+    "Select Link Type",
+    "Choose link type:",
+    (platform) => {
+      // WhatsApp
       if (platform === "1") {
-        showModal("phone", "WhatsApp Number", "Enter WhatsApp number (with country code, e.g., 911234567890):", (number) => {
-          if (number && number.trim() !== "") {
+        showModal(
+          "phone",
+          "WhatsApp Number",
+          "Enter WhatsApp number (with country code):",
+          (number) => {
+            if (!number) return;
             const link = `https://wa.me/${number.replace(/[^\d]/g, "")}`;
-            // Restore selection before executing command
             restoreSelection();
-            if (adIdentifier) {
-              const editor = editorsRef.current[adIdentifier];
-              if (editor) editor.focus();
-            }
+            editorsRef.current[adIdentifier]?.focus();
             callback(link);
           }
-        });
-      } else if (platform === "2") {
-        showModal("username", "Telegram Username", "Enter Telegram username (without @):", (username) => {
-          if (username && username.trim() !== "") {
-            const link = `https://t.me/${username.trim()}`;
-            // Restore selection before executing command
-            restoreSelection();
-            if (adIdentifier) {
-              const editor = editorsRef.current[adIdentifier];
-              if (editor) editor.focus();
-            }
-            callback(link);
-          }
-        });
+        );
       }
-    });
-  };
+
+      // Telegram Username
+      else if (platform === "2") {
+        showModal(
+          "username",
+          "Telegram Username",
+          "Enter Telegram username (without @):",
+          (username) => {
+            if (!username) return;
+            const link = `https://t.me/${username.trim()}`;
+            restoreSelection();
+            editorsRef.current[adIdentifier]?.focus();
+            callback(link);
+          }
+        );
+      }
+
+      // ✅ Custom / Group Link
+      else if (platform === "3") {
+        showModal(
+          "addLink",
+          "Custom / Group Link",
+          "Paste full link (https://...)",
+          (url) => {
+            if (!url) return;
+
+            const safeUrl = url.startsWith("http")
+              ? url
+              : `https://${url}`;
+
+            restoreSelection();
+            editorsRef.current[adIdentifier]?.focus();
+            callback(safeUrl);
+          }
+        );
+      }
+    }
+  );
+};
 
   const resizeLastImage = (adIdentifier, width) => {
     const editor = editorsRef.current[adIdentifier];
@@ -975,27 +1003,32 @@ export default function PremiumAdsEditor() {
               {(modalType === "platform" || modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section") && (
                 <div>
                   <p className="text-gray-700 mb-4">{modalMessage}</p>
-                  {modalType === "platform" && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          if (modalCallback) modalCallback("1");
-                        }}
-                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        WhatsApp (1)
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (modalCallback) modalCallback("2");
-                        }}
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        Telegram (2)
-                      </button>
-                    </div>
-                  )}
-                  {(modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section") && (
+                 {modalType === "platform" && (
+  <div className="space-y-3">
+    <button
+      onClick={() => modalCallback?.("1")}
+      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg"
+    >
+      WhatsApp Number
+    </button>
+
+    <button
+      onClick={() => modalCallback?.("2")}
+      className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg"
+    >
+      Telegram Username
+    </button>
+
+    <button
+      onClick={() => modalCallback?.("3")}
+      className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg"
+    >
+      Custom / Group Link
+    </button>
+  </div>
+)}
+
+                  {(modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section" || modalType === "addLink" ) && (
                     <div className="space-y-3">
                       <input
                         type="text"
