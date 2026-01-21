@@ -1000,7 +1000,7 @@ export default function PremiumAdsEditor() {
                 </div>
               )}
 
-              {(modalType === "platform" || modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section") && (
+              {(modalType === "platform" || modalType === "phone" || modalType === "username" || modalType === "color" || modalType === "emoji" || modalType === "section" || modalType === "addLink") && (
                 <div>
                   <p className="text-gray-700 mb-4">{modalMessage}</p>
                  {modalType === "platform" && (
