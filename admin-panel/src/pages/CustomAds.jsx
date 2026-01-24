@@ -47,6 +47,8 @@ export default function PremiumAdsEditor() {
   const [site, setSite] = useState(siteOptions[0].value);
   const editorsRef = useRef({});
   const savedSelectionRef = useRef(null);
+  const selectedImageRef = useRef(null);
+
 
   // Modal states
   const [modalType, setModalType] = useState(null); 
@@ -269,30 +271,45 @@ export default function PremiumAdsEditor() {
 
   editor.focus();
 
-  const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return;
+  // 1. If image explicitly selected
+  if (selectedImageRef.current) {
+    const img = selectedImageRef.current;
 
-  const range = sel.getRangeAt(0);
+    // already linked → update link
+    if (img.parentElement?.tagName === "A") {
+      img.parentElement.href = url;
+      img.parentElement.target = "_blank";
+    } else {
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      img.parentNode.insertBefore(a, img);
+      a.appendChild(img);
+    }
 
-  // If image selected → wrap it
-  const node =
-    range.startContainer.nodeType === 1
-      ? range.startContainer
-      : range.startContainer.parentNode;
-
-  if (node && node.tagName === "IMG") {
-    const a = document.createElement("a");
-    a.href = url;
-    a.target = "_blank";
-
-    node.parentNode.insertBefore(a, node);
-    a.appendChild(node);
+    selectedImageRef.current = null;
     return;
   }
 
-  // Else → normal text link
+  // 2. Normal text linking
   document.execCommand("createLink", false, url);
 };
+
+  const attachImageClickHandlers = (editor) => {
+  if (!editor) return;
+
+  editor.querySelectorAll("img").forEach((img) => {
+    img.onclick = () => {
+      editor
+        .querySelectorAll("img")
+        .forEach((i) => i.classList.remove("selected"));
+
+      img.classList.add("selected");
+      selectedImageRef.current = img;
+    };
+  });
+};
+
 
 
   const insertImage = (adIdentifier, file) => {
@@ -312,7 +329,7 @@ export default function PremiumAdsEditor() {
     reader.readAsDataURL(file);
   };
 
- const insertImageWithLink = (editor, imageSrc, link) => {
+const insertImageWithLink = (editor, imageSrc, link) => {
   if (!editor) return;
 
   editor.focus();
@@ -324,8 +341,19 @@ export default function PremiumAdsEditor() {
   img.style.borderRadius = "4px";
   img.draggable = false;
 
+  // enable click selection
+  img.onclick = () => {
+    editor
+      .querySelectorAll("img")
+      .forEach((i) => i.classList.remove("selected"));
+
+    img.classList.add("selected");
+    selectedImageRef.current = img;
+  };
+
   let nodeToInsert = img;
 
+  // wrap with link if exists
   if (link) {
     const a = document.createElement("a");
     a.href = link;
@@ -444,13 +472,16 @@ export default function PremiumAdsEditor() {
                           </div>
 
                           <div
-                            ref={(el) => (editorsRef.current[safeId] = el)}
-                            contentEditable
-                            dangerouslySetInnerHTML={{ __html: ad.content }}
-                            className="content-editor min-h-[150px] p-4 focus:outline-none prose max-w-none"
-                            onBlur={saveSelection}
-                          />
-                        </div>
+  ref={(el) => {
+    editorsRef.current[safeId] = el;
+    attachImageClickHandlers(el);
+  }}
+  contentEditable
+  dangerouslySetInnerHTML={{ __html: ad.content }}
+  className="content-editor min-h-[150px] p-4 focus:outline-none prose max-w-none"
+  onBlur={saveSelection}
+/>
+
                       )}
                     </Draggable>
                   );
@@ -535,6 +566,10 @@ export default function PremiumAdsEditor() {
         .content-editor img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
         .content-editor a { color: #2563eb; text-decoration: underline; }
         .content-editor:focus { outline: none; }
+        .content-editor img.selected {
+  outline: 2px solid #2563eb;
+}
+
       `}</style>
     </div>
   );
