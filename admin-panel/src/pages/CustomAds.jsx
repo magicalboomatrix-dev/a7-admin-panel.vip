@@ -1,36 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
+import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import imageCompression from "browser-image-compression";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import api from "../utils/api";
+
 import {
-  FiBold,
-  FiItalic,
-  FiUnderline,
-  FiType,
-  FiLink,
-  FiImage,
-  FiAlignLeft,
-  FiAlignCenter,
-  FiAlignRight,
-  FiList,
-  FiTrash2,
-  FiSave,
-  FiPlus,
-  FiMove,
-  FiX,
-  FiEdit3,
-  FiEye,
-  FiMaximize,
-  FiMinimize,
-  FiUpload,
-  FiDownload,
+  FiBold, FiItalic, FiType, FiLink, FiImage, FiAlignLeft,
+  FiAlignCenter, FiTrash2, FiSave, FiPlus, FiMove, FiX, FiEye, FiExternalLink
 } from "react-icons/fi";
-import {
-  MdFormatColorText,
-  MdFormatStrikethrough,
-  MdEmojiEmotions,
-  MdFormatAlignJustify,
-  MdNumbers,
-} from "react-icons/md";
+import { MdFormatColorText, MdFormatStrikethrough } from "react-icons/md";
 
 const siteOptions = [
   { label: "A1 Satta", value: "a1satta.vip" },
@@ -39,352 +21,190 @@ const siteOptions = [
   { label: "B7 Satta", value: "b7satta.vip" },
 ];
 
+// --- Sub-Component: Individual Ad Editor ---
+const AdInstance = ({ ad, position, index, onRemove, onDeleteDB, site }) => {
+  const [isCompressing, setIsCompressing] = useState(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+      }),
+      Link.configure({
+        openOnClick: false,
+        linkOnPaste: true,
+        HTMLAttributes: { 
+          class: "text-blue-600 underline cursor-pointer",
+          target: '_blank',
+          rel: 'noopener noreferrer' 
+        },
+      }),
+      Placeholder.configure({
+        placeholder: "Write ad content or paste/drag images here...",
+      }),
+    ],
+    content: ad.content,
+    onUpdate: ({ editor }) => {
+      ad.content = editor.getHTML();
+    },
+  });
+
+  // Handle Image Compression & Insertion
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+    setIsCompressing(true);
+    try {
+      const options = { maxSizeMB: 0.2, maxWidthOrHeight: 800, useWebWorker: true };
+      const compressedFile = await imageCompression(file, options);
+      const reader = new FileReader();
+      reader.readAsDataURL(compressedFile);
+      reader.onloadend = () => {
+        editor.chain().focus().setImage({ src: reader.result }).run();
+      };
+    } catch (error) {
+      console.error("Compression failed", error);
+    } finally {
+      setIsCompressing(false);
+    }
+  };
+
+  const addLink = () => {
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt("Enter URL:", previousUrl);
+    
+    // If cancelled
+    if (url === null) return;
+
+    // If empty, remove link
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+
+    // Fix: Force selection of the node (especially images) before applying link
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  };
+
+  if (!editor) return null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-4">
+      {/* Ad Header */}
+      <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+        <div className="flex items-center space-x-2">
+          <div className="cursor-move p-2 text-gray-400 hover:text-gray-600">
+            <FiMove />
+          </div>
+          <span className="text-sm font-bold text-gray-600 uppercase">{position} #{index + 1}</span>
+        </div>
+        <div className="flex gap-1">
+          <button onClick={onRemove} className="p-2 text-amber-600 hover:bg-amber-50 rounded"><FiX /></button>
+          {ad.id && <button onClick={() => onDeleteDB(ad.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><FiTrash2 /></button>}
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="p-2 border-b bg-white flex flex-wrap gap-1 items-center">
+        <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-2 rounded ${editor.isActive("bold") ? "bg-blue-100 text-blue-600" : "hover:bg-gray-100"}`}><FiBold /></button>
+        <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-2 rounded ${editor.isActive("italic") ? "bg-blue-100 text-blue-600" : "hover:bg-gray-100"}`}><FiItalic /></button>
+        <button onClick={() => editor.chain().focus().toggleStrike().run()} className={`p-2 rounded ${editor.isActive("strike") ? "bg-blue-100 text-blue-600" : "hover:bg-gray-100"}`}><MdFormatStrikethrough /></button>
+        <div className="h-6 w-[1px] bg-gray-200 mx-1" />
+        <button onClick={addLink} className={`p-2 rounded ${editor.isActive("link") ? "bg-blue-100 text-blue-600" : "hover:bg-gray-100"}`}><FiLink /></button>
+        <label className="p-2 rounded hover:bg-gray-100 cursor-pointer relative">
+          {isCompressing ? <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" /> : <FiImage />}
+          <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e.target.files[0])} />
+        </label>
+      </div>
+
+      {/* Floating Image Menu */}
+      {editor && (
+        <BubbleMenu editor={editor} shouldShow={({ editor }) => editor.isActive("image")}>
+          <div className="bg-slate-800 text-white p-1 rounded-lg shadow-xl flex items-center gap-1">
+            <button onClick={addLink} className="p-2 hover:bg-slate-700 rounded text-xs flex items-center gap-1">
+              <FiLink /> {editor.isActive("link") ? "Change Link" : "Link Image"}
+            </button>
+            <div className="w-[1px] h-4 bg-slate-600 mx-1" />
+            <button onClick={() => editor.chain().focus().deleteSelection().run()} className="p-2 hover:bg-red-500 rounded text-xs flex items-center gap-1">
+              <FiTrash2 /> Remove Image
+            </button>
+          </div>
+        </BubbleMenu>
+      )}
+
+      {/* Editor Content */}
+      <div className="p-4 min-h-[150px] prose prose-sm max-w-none focus:outline-none custom-editor">
+        <EditorContent editor={editor} />
+      </div>
+
+      <style jsx global>{`
+        .custom-editor .ProseMirror { min-height: 120px; outline: none; }
+        .custom-editor img { 
+          display: inline-block; 
+          max-width: 100%; 
+          height: auto; 
+          border-radius: 8px; 
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .custom-editor img.ProseMirror-selectednode { outline: 3px solid #3b82f6; }
+        .custom-editor .ProseMirror p.is-editor-empty:first-child::before {
+          content: attr(data-placeholder);
+          float: left; color: #adb5bd; pointer-events: none; height: 0;
+        }
+        /* Style for linked images */
+        .custom-editor a { cursor: pointer; }
+      `}</style>
+    </div>
+  );
+};
+
+// --- Main Page Component ---
 export default function PremiumAdsEditor() {
   const [ads, setAds] = useState({ top: [], middle: [], bottom: [] });
-  const [activeSection, setActiveSection] = useState("top");
-  const [isSaving, setIsSaving] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
   const [site, setSite] = useState(siteOptions[0].value);
-  const editorsRef = useRef({});
-  const savedSelectionRef = useRef(null);
-  const selectedImageRef = useRef(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-
-  // Modal states
-  const [modalType, setModalType] = useState(null); 
-  const [modalMessage, setModalMessage] = useState("");
-  const [modalInput, setModalInput] = useState("");
-  const [modalCallback, setModalCallback] = useState(null);
-  const [modalTitle, setModalTitle] = useState("");
-
-  const showModal = (type, title, message, callback = null) => {
-    setModalType(type);
-    setModalTitle(title);
-    setModalMessage(message);
-    setModalInput("");
-    setModalCallback(() => callback);
-  };
-
-  const closeModal = () => {
-    setModalType(null);
-    setModalTitle("");
-    setModalMessage("");
-    setModalInput("");
-    setModalCallback(null);
-  };
-
-  const handleModalSubmit = () => {
-    if (modalCallback) {
-      modalCallback(modalInput);
-    }
-    closeModal();
-  };
-
-  const normalizeAdsFromServer = (arr) =>
-    arr.map((a) => ({
-      ...a,
-      id: a.id ?? a._id ?? undefined,
-    }));
-
-  // Load ads
   useEffect(() => {
-    async function fetchAds() {
-      try {
-        const res = await api.get(`/ads?site=${encodeURIComponent(site)}`);
-        const data = res.data;
-        if (Array.isArray(data)) {
-          const normalized = normalizeAdsFromServer(data);
-          setAds({
-            top: normalized.filter((a) => a.position === "top").sort((a, b) => a.order - b.order),
-            middle: normalized.filter((a) => a.position === "middle").sort((a, b) => a.order - b.order),
-            bottom: normalized.filter((a) => a.position === "bottom").sort((a, b) => a.order - b.order),
-          });
-        }
-      } catch (err) {
-        console.error(err);
-        setAds({ top: [], middle: [], bottom: [] });
-      }
-    }
     fetchAds();
   }, [site]);
 
-  const makeTempId = (position) =>
-    `tmp-${position}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-
-  const addAd = (position = "top") => {
-    const tempId = makeTempId(position);
-    setAds((prev) => ({
-      ...prev,
-      [position]: [
-        ...prev[position],
-        {
-          id: undefined,
-          _tempId: tempId,
-          content: "",
-          position,
-          order: prev[position].length,
-          site,
-        },
-      ],
-    }));
-  };
-
-  const removeAd = (position, identifier) => {
-    setAds((prev) => ({
-      ...prev,
-      [position]: prev[position].filter(
-        (ad) => (ad.id ?? ad._tempId) !== identifier
-      ),
-    }));
-    delete editorsRef.current[identifier];
-  };
-
-  const deleteAdFromDB = async (id, position) => {
-    showModal("confirm", "Delete Ad", "Delete this ad permanently from database?", (confirmed) => {
-      if (confirmed === "yes") {
-        handleDeleteAd(id, position);
-      }
-    });
-  };
-
-  const handleDeleteAd = async (id, position) => {
+  const fetchAds = async () => {
     try {
-      await api.delete(`/ads/${id}`);
-      setAds((prev) => ({
-        ...prev,
-        [position]: prev[position].filter((ad) => ad.id !== id),
-      }));
-      delete editorsRef.current[id];
-      showModal("message", "Success", "Ad deleted successfully!");
-    } catch (err) {
-      showModal("message", "Error", "Failed to delete ad.");
+      const res = await api.get(`/ads?site=${encodeURIComponent(site)}`);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setAds({
+        top: data.filter(a => a.position === "top").sort((a, b) => (a.order || 0) - (b.order || 0)),
+        middle: data.filter(a => a.position === "middle").sort((a, b) => (a.order || 0) - (b.order || 0)),
+        bottom: data.filter(a => a.position === "bottom").sort((a, b) => (a.order || 0) - (b.order || 0)),
+      });
+    } catch (err) { 
+      console.error("Fetch error:", err); 
+      setAds({ top: [], middle: [], bottom: [] });
     }
   };
 
-  const handleSectionSave = async (position) => {
-    if (isSaving) return;
+  const addAd = (position) => {
+    const newAd = { _tempId: Date.now(), content: "", position, site, order: ads[position].length };
+    setAds(prev => ({ ...prev, [position]: [...prev[position], newAd] }));
+  };
+
+  const handleSave = async (position) => {
     setIsSaving(true);
-
     try {
-      const sectionAds = ads[position].map((ad, idx) => {
-        const identifier = ad.id ?? ad._tempId;
-        const editorEl = editorsRef.current[identifier];
-        const contentFromEditor = editorEl ? editorEl.innerHTML : ad.content ?? "";
-
-        return {
-          _id: ad.id ?? undefined,
-          content: contentFromEditor,
-          position,
-          order: idx,
-          site,
-        };
-      });
-
-      const allEmpty = sectionAds.every((s) => !s.content || s.content.trim() === "");
-
-      if (allEmpty && sectionAds.length > 0) {
-        showModal("confirm", "Empty Ads", `${position} ads are empty. Save anyway?`, (confirmed) => {
-          if (confirmed === "yes") performSave(sectionAds, position);
-          else setIsSaving(false);
-        });
-        return;
-      }
-
-      performSave(sectionAds, position);
-    } catch (err) {
-      setIsSaving(false);
-    }
-  };
-
-  const performSave = async (sectionAds, position) => {
-    try {
-      const res = await api.post(`/ads?site=${encodeURIComponent(site)}`, sectionAds);
-      const data = res.data ?? {};
-      if (Array.isArray(data.ads)) {
-        const normalized = normalizeAdsFromServer(data.ads);
-        setAds((prev) => ({
-          ...prev,
-          [position]: normalized
-            .filter((a) => a.position === position)
-            .sort((a, b) => a.order - b.order),
-        }));
-        showModal("message", "Success", `${position} ads saved successfully!`);
-      }
-    } catch (err) {
-      showModal("message", "Error", "Error saving ads.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const saveSelection = () => {
-    const sel = window.getSelection();
-    if (sel.getRangeAt && sel.rangeCount) {
-      savedSelectionRef.current = sel.getRangeAt(0);
-    }
-  };
-
-  const restoreSelection = () => {
-    if (savedSelectionRef.current) {
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(savedSelectionRef.current);
-    }
-  };
-
-  const execCommand = (adIdentifier, command, value = null) => {
-    const editor = editorsRef.current[adIdentifier];
-    if (editor) {
-      editor.focus();
-      document.execCommand(command, false, value);
-    }
-  };
-
-  const generateContactLink = (callback, adIdentifier) => {
-    saveSelection();
-    showModal("platform", "Select Link Type", "Choose link type:", (platform) => {
-      if (platform === "1") {
-        showModal("phone", "WhatsApp", "Enter number with country code:", (num) => {
-          if (!num) return;
-          restoreSelection();
-          callback(`https://wa.me/${num.replace(/[^\d]/g, "")}`);
-        });
-      } else if (platform === "2") {
-        showModal("username", "Telegram", "Enter username (without @):", (un) => {
-          if (!un) return;
-          restoreSelection();
-          callback(`https://t.me/${un.trim()}`);
-        });
-      } else if (platform === "3") {
-        showModal("addLink", "Custom Link", "Paste full URL:", (url) => {
-          if (!url) return;
-          restoreSelection();
-          callback(url.startsWith("http") ? url : `https://${url}`);
-        });
-      }
-    });
-  };
-
-  const applySmartLink = (adIdentifier, url) => {
-  const editor = editorsRef.current[adIdentifier];
-  if (!editor) return;
-
-  editor.focus();
-
-  // 1. If image explicitly selected
-  if (selectedImageRef.current) {
-    const img = selectedImageRef.current;
-
-    // already linked → update link
-    if (img.parentElement?.tagName === "A") {
-      img.parentElement.href = url;
-      img.parentElement.target = "_blank";
-    } else {
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      img.parentNode.insertBefore(a, img);
-      a.appendChild(img);
-    }
-
-    selectedImageRef.current = null;
-    return;
-  }
-
-  // 2. Normal text linking
-  document.execCommand("createLink", false, url);
-};
-
-  const attachImageClickHandlers = (editor) => {
-  if (!editor) return;
-
-  editor.querySelectorAll("img").forEach((img) => {
-    img.onclick = () => {
-      editor
-        .querySelectorAll("img")
-        .forEach((i) => i.classList.remove("selected"));
-
-      img.classList.add("selected");
-      selectedImageRef.current = img;
-    };
-  });
-};
-
-
-
-  const insertImage = (adIdentifier, file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const editor = editorsRef.current[adIdentifier];
-      showModal("confirm", "Add Link", "Add link to this image?", (confirmed) => {
-        if (confirmed === "yes") {
-          generateContactLink((link) => {
-            insertImageWithLink(editor, e.target.result, link);
-          }, adIdentifier);
-        } else {
-          insertImageWithLink(editor, e.target.result, null);
-        }
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-const insertImageWithLink = (editor, imageSrc, link) => {
-  if (!editor) return;
-
-  editor.focus();
-
-  const img = document.createElement("img");
-  img.src = imageSrc;
-  img.style.width = "200px";
-  img.style.height = "auto";
-  img.style.borderRadius = "4px";
-  img.draggable = false;
-
-  // enable click selection
-  img.onclick = () => {
-    editor
-      .querySelectorAll("img")
-      .forEach((i) => i.classList.remove("selected"));
-
-    img.classList.add("selected");
-    selectedImageRef.current = img;
-  };
-
-  let nodeToInsert = img;
-
-  // wrap with link if exists
-  if (link) {
-    const a = document.createElement("a");
-    a.href = link;
-    a.target = "_blank";
-    a.appendChild(img);
-    nodeToInsert = a;
-  }
-
-  const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) {
-    editor.appendChild(nodeToInsert);
-    return;
-  }
-
-  const range = sel.getRangeAt(0);
-  range.deleteContents();
-  range.insertNode(nodeToInsert);
-
-  // move cursor after inserted image
-  range.setStartAfter(nodeToInsert);
-  range.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(range);
-};
-
-
-  const resizeLastImage = (adIdentifier, width) => {
-    const editor = editorsRef.current[adIdentifier];
-    const images = editor?.getElementsByTagName("img");
-    if (images?.length > 0) {
-      images[images.length - 1].style.width = `${width}px`;
+      const payload = ads[position].map((ad, idx) => ({
+        ...ad,
+        order: idx,
+        id: ad.id || ad._id || undefined
+      }));
+      await api.post(`/ads?site=${encodeURIComponent(site)}`, payload);
+      alert(`${position} ads saved successfully!`);
+      fetchAds();
+    } catch (err) { 
+      alert("Save failed. Please check your connection."); 
+    } finally { 
+      setIsSaving(false); 
     }
   };
 
@@ -393,184 +213,96 @@ const insertImageWithLink = (editor, imageSrc, link) => {
     const items = Array.from(ads[position]);
     const [reordered] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reordered);
-    setAds((prev) => ({ ...prev, [position]: items }));
+    setAds(prev => ({ ...prev, [position]: items }));
   };
 
-  const ToolbarButton = ({ icon: Icon, label, onClick, active = false }) => (
-    <button
-      onClick={onClick}
-      className={`p-2 rounded-lg transition-all duration-200 flex flex-col items-center justify-center border ${
-        active ? "bg-blue-100 text-blue-600 border-blue-200" : "bg-white text-gray-700 hover:bg-gray-50 border-gray-200"
-      } min-w-[60px] h-[60px] sm:h-[50px] sm:min-w-[50px]`}
-      title={label}
-    >
-      <Icon className="w-5 h-5 mb-1" />
-      <span className="text-xs font-medium">{label}</span>
-    </button>
-  );
-
-  const renderAds = (position) => (
-    <div className={activeSection === position ? "block" : "hidden md:block"}>
-      <DragDropContext onDragEnd={(res) => onDragEnd(res, position)}>
-        <Droppable droppableId={position}>
-          {(provided, snapshot) => (
-            <div
-              {...provided.droppableProps}
-              ref={provided.innerRef}
-              className={`space-y-4 p-2 rounded-xl min-h-[200px] ${snapshot.isDraggingOver ? "bg-blue-50/50" : ""}`}
-            >
-              {ads[position].length === 0 ? (
-                <div className="text-center py-10 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50/50">
-                  <FiEye className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-500">No {position} ads yet.</p>
-                </div>
-              ) : (
-                ads[position].map((ad, index) => {
-                  const safeId = ad.id ?? ad._tempId;
-                  const draggableId = `drag-${safeId}-${position}`;
-                  return (
-                    <Draggable key={safeId} draggableId={draggableId} index={index}>
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={`bg-white rounded-xl shadow-sm border overflow-hidden ${snapshot.isDragging ? "shadow-lg ring-2 ring-blue-500" : ""}`}
-                        >
-                          <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-                            <div className="flex items-center space-x-3">
-                              <div {...provided.dragHandleProps} className="cursor-move p-2 hover:bg-gray-200 rounded-lg">
-                                <FiMove className="w-4 h-4 text-gray-50" />
-                              </div>
-                              <h3 className="font-semibold text-gray-800 capitalize">{position} Ad {index + 1}</h3>
-                            </div>
-                            <div className="flex space-x-2">
-                              <button onClick={() => removeAd(position, safeId)} className="p-2 text-amber-600"><FiX /></button>
-                              {ad.id && <button onClick={() => deleteAdFromDB(ad.id, position)} className="p-2 text-red-600"><FiTrash2 /></button>}
-                            </div>
-                          </div>
-
-                          <div className="p-3 border-b bg-gray-50/30">
-                            <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-10 gap-2">
-                              <ToolbarButton icon={FiBold} label="Bold" onClick={() => execCommand(safeId, "bold")} />
-                              <ToolbarButton icon={FiItalic} label="Italic" onClick={() => execCommand(safeId, "italic")} />
-                              <ToolbarButton icon={FiUnderline} label="Under" onClick={() => execCommand(safeId, "underline")} />
-                              <ToolbarButton icon={MdFormatStrikethrough} label="Strike" onClick={() => execCommand(safeId, "strikeThrough")} />
-                              <ToolbarButton icon={MdFormatColorText} label="Color" onClick={() => showModal("color", "Color", "Hex/Name:", (c) => execCommand(safeId, "foreColor", c))} />
-                              <ToolbarButton icon={MdEmojiEmotions} label="Emoji" onClick={() => showModal("emoji", "Emoji", "Paste emoji:", (e) => execCommand(safeId, "insertText", e))} />
-                         
-                              <ToolbarButton icon={FiLink} label="Link" onClick={() => generateContactLink((url) => applySmartLink(safeId, url), safeId)}/>
-
-                              <ToolbarButton icon={FiImage} label="Image" onClick={() => document.getElementById(`file-${safeId}`).click()} />
-                              <ToolbarButton icon={FiAlignLeft} label="Left" onClick={() => execCommand(safeId, "justifyLeft")} />
-                              <ToolbarButton icon={FiAlignCenter} label="Center" onClick={() => execCommand(safeId, "justifyCenter")} />
-                            </div>
-                            <div className="mt-2 flex gap-2 items-center text-xs">
-                              <span>Resize Last Image:</span>
-                              {[100, 200, 300].map(s => <button key={s} onClick={() => resizeLastImage(safeId, s)} className="px-2 py-1 bg-gray-200 rounded">{s}px</button>)}
-                            </div>
-                            <input type="file" id={`file-${safeId}`} className="hidden" accept="image/*" onChange={(e) => e.target.files[0] && insertImage(safeId, e.target.files[0])} />
-                          </div>
-
-                          <div
-  ref={(el) => {
-    editorsRef.current[safeId] = el;
-    attachImageClickHandlers(el);
-  }}
-  contentEditable
-  dangerouslySetInnerHTML={{ __html: ad.content }}
-  className="content-editor min-h-[150px] p-4 focus:outline-none prose max-w-none"
-  onBlur={saveSelection}
-/>
-
-                      )}
-                    </Draggable>
-                  );
-                })
-              )}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
-      </DragDropContext>
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Premium Ads Editor</h1>
-          <select className="mt-2 p-2 border rounded" value={site} onChange={(e) => setSite(e.target.value)}>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">ADS MANAGER</h1>
+          <select 
+            className="mt-2 p-2 bg-white border rounded-lg shadow-sm focus:ring-2 ring-blue-500 outline-none cursor-pointer" 
+            value={site} 
+            onChange={(e) => setSite(e.target.value)}
+          >
             {siteOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setPreviewMode(!previewMode)} className="px-4 py-2 bg-white border rounded"><FiEye className="inline mr-2"/>Preview</button>
-          <button onClick={() => handleSectionSave(activeSection)} disabled={isSaving} className="px-4 py-2 bg-blue-600 text-white rounded"><FiSave className="inline mr-2"/>Save</button>
+        <div className="flex gap-2">
+           <button 
+             onClick={() => window.open(`https://${site}`, "_blank")} 
+             className="px-5 py-2.5 bg-white border rounded-xl font-medium flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm"
+           >
+             <FiExternalLink /> View Site
+           </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {["top", "middle", "bottom"].map((pos) => (
-          <div key={pos} className="bg-white rounded-2xl shadow border p-5">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold capitalize">{pos} Ads</h2>
-              <button onClick={() => addAd(pos)} className="p-2 bg-green-50 text-green-600 rounded"><FiPlus /></button>
+          <div key={pos} className="flex flex-col h-full">
+            <div className="flex justify-between items-center mb-4 px-2">
+              <h2 className="text-lg font-bold capitalize text-slate-700">{pos} Section</h2>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => addAd(pos)} 
+                  className="p-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors"
+                  title="Add New Ad"
+                >
+                  <FiPlus />
+                </button>
+                <button 
+                  onClick={() => handleSave(pos)} 
+                  disabled={isSaving} 
+                  className="p-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  title="Save All in Section"
+                >
+                  <FiSave />
+                </button>
+              </div>
             </div>
-            {renderAds(pos)}
+
+            <DragDropContext onDragEnd={(res) => onDragEnd(res, pos)}>
+              <Droppable droppableId={pos}>
+                {(provided) => (
+                  <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4 min-h-[100px]">
+                    {ads[pos].map((ad, index) => (
+                      <Draggable key={ad.id || ad._tempId} draggableId={String(ad.id || ad._tempId)} index={index}>
+                        {(p) => (
+                          <div ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps}>
+                            <AdInstance 
+                              ad={ad} 
+                              position={pos} 
+                              index={index} 
+                              site={site}
+                              onRemove={() => setAds(prev => ({ 
+                                ...prev, 
+                                [pos]: prev[pos].filter(a => (a.id || a._tempId) !== (ad.id || ad._tempId)) 
+                              }))}
+                              onDeleteDB={async (id) => {
+                                if(window.confirm("Delete permanently from database?")) {
+                                  try {
+                                    await api.delete(`/ads/${id}`);
+                                    fetchAds();
+                                  } catch (err) {
+                                    alert("Delete failed.");
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
           </div>
         ))}
       </div>
-
-      {modalType && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between mb-4">
-              <h2 className="text-lg font-bold">{modalTitle}</h2>
-              <button onClick={closeModal}><FiX /></button>
-            </div>
-            <p className="mb-4 text-gray-600">{modalMessage}</p>
-            {modalType === "platform" ? (
-              <div className="space-y-2">
-                <button onClick={() => modalCallback("1")} className="w-full p-2 bg-green-600 text-white rounded">WhatsApp</button>
-                <button onClick={() => modalCallback("2")} className="w-full p-2 bg-blue-500 text-white rounded">Telegram</button>
-                <button onClick={() => modalCallback("3")} className="w-full p-2 bg-gray-700 text-white rounded">Custom Link</button>
-              </div>
-            ) : modalType === "confirm" ? (
-              <div className="flex gap-2">
-                <button onClick={() => { modalCallback("yes"); closeModal(); }} className="flex-1 p-2 bg-red-600 text-white rounded">Yes</button>
-                <button onClick={closeModal} className="flex-1 p-2 bg-gray-200 rounded">No</button>
-              </div>
-            ) : modalType === "message" ? (
-              <button onClick={closeModal} className="w-full p-2 bg-blue-600 text-white rounded">OK</button>
-            ) : (
-              <div className="space-y-4">
-                <input
-                  autoFocus
-                  className="w-full p-2 border rounded"
-                  value={modalInput}
-                  onChange={(e) => setModalInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleModalSubmit()}
-                />
-                <div className="flex gap-2">
-                  <button onClick={handleModalSubmit} className="flex-1 p-2 bg-blue-600 text-white rounded">Submit</button>
-                  <button onClick={closeModal} className="flex-1 p-2 bg-gray-200 rounded">Cancel</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <style jsx global>{`
-        .content-editor img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
-        .content-editor a { color: #2563eb; text-decoration: underline; }
-        .content-editor:focus { outline: none; }
-        .content-editor img.selected {
-  outline: 2px solid #2563eb;
-}
-
-      `}</style>
     </div>
   );
 }
