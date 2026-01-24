@@ -263,6 +263,38 @@ export default function PremiumAdsEditor() {
     });
   };
 
+  const applySmartLink = (adIdentifier, url) => {
+  const editor = editorsRef.current[adIdentifier];
+  if (!editor) return;
+
+  editor.focus();
+
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+
+  const range = sel.getRangeAt(0);
+
+  // If image selected → wrap it
+  const node =
+    range.startContainer.nodeType === 1
+      ? range.startContainer
+      : range.startContainer.parentNode;
+
+  if (node && node.tagName === "IMG") {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+
+    node.parentNode.insertBefore(a, node);
+    a.appendChild(node);
+    return;
+  }
+
+  // Else → normal text link
+  document.execCommand("createLink", false, url);
+};
+
+
   const insertImage = (adIdentifier, file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -280,12 +312,45 @@ export default function PremiumAdsEditor() {
     reader.readAsDataURL(file);
   };
 
-  const insertImageWithLink = (editor, imageSrc, link) => {
-    const imgHTML = `<img src="${imageSrc}" style="width:200px;height:auto;border-radius:4px;" draggable="false" />`;
-    editor.focus();
-    const html = link ? `<a href="${link}" target="_blank">${imgHTML}</a>` : imgHTML;
-    document.execCommand("insertHTML", false, html);
-  };
+ const insertImageWithLink = (editor, imageSrc, link) => {
+  if (!editor) return;
+
+  editor.focus();
+
+  const img = document.createElement("img");
+  img.src = imageSrc;
+  img.style.width = "200px";
+  img.style.height = "auto";
+  img.style.borderRadius = "4px";
+  img.draggable = false;
+
+  let nodeToInsert = img;
+
+  if (link) {
+    const a = document.createElement("a");
+    a.href = link;
+    a.target = "_blank";
+    a.appendChild(img);
+    nodeToInsert = a;
+  }
+
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) {
+    editor.appendChild(nodeToInsert);
+    return;
+  }
+
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(nodeToInsert);
+
+  // move cursor after inserted image
+  range.setStartAfter(nodeToInsert);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+};
+
 
   const resizeLastImage = (adIdentifier, width) => {
     const editor = editorsRef.current[adIdentifier];
@@ -364,7 +429,9 @@ export default function PremiumAdsEditor() {
                               <ToolbarButton icon={MdFormatStrikethrough} label="Strike" onClick={() => execCommand(safeId, "strikeThrough")} />
                               <ToolbarButton icon={MdFormatColorText} label="Color" onClick={() => showModal("color", "Color", "Hex/Name:", (c) => execCommand(safeId, "foreColor", c))} />
                               <ToolbarButton icon={MdEmojiEmotions} label="Emoji" onClick={() => showModal("emoji", "Emoji", "Paste emoji:", (e) => execCommand(safeId, "insertText", e))} />
-                              <ToolbarButton icon={FiLink} label="Link" onClick={() => generateContactLink((url) => execCommand(safeId, "createLink", url), safeId)} />
+                         
+                              <ToolbarButton icon={FiLink} label="Link" onClick={() => generateContactLink((url) => applySmartLink(safeId, url), safeId)}/>
+
                               <ToolbarButton icon={FiImage} label="Image" onClick={() => document.getElementById(`file-${safeId}`).click()} />
                               <ToolbarButton icon={FiAlignLeft} label="Left" onClick={() => execCommand(safeId, "justifyLeft")} />
                               <ToolbarButton icon={FiAlignCenter} label="Center" onClick={() => execCommand(safeId, "justifyCenter")} />
