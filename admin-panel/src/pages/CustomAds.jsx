@@ -85,6 +85,24 @@ export default function PremiumAdsEditor() {
       id: a.id ?? a._id ?? undefined,
     }));
 
+  // Function to clean HTML before saving - NEW: Removes visual styles but keeps link
+  const cleanHtmlForSaving = (html) => {
+    if (!html) return html;
+    
+    // Create a temporary div to parse the HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Remove outline styles from all images
+    const images = tempDiv.querySelectorAll('img');
+    images.forEach(img => {
+      img.style.outline = '';
+      img.style.outlineOffset = '';
+    });
+    
+    return tempDiv.innerHTML;
+  };
+
   // Load ads
   useEffect(() => {
     async function fetchAds() {
@@ -171,10 +189,13 @@ export default function PremiumAdsEditor() {
         const identifier = ad.id ?? ad._tempId;
         const editorEl = editorsRef.current[identifier];
         const contentFromEditor = editorEl ? editorEl.innerHTML : ad.content ?? "";
+        
+        // Clean HTML before saving - REMOVES VISUAL STYLES BUT KEEPS LINKS
+        const cleanedContent = cleanHtmlForSaving(contentFromEditor);
 
         return {
           _id: ad.id ?? undefined,
-          content: contentFromEditor,
+          content: cleanedContent, // Use cleaned content
           position,
           order: idx,
           site,
@@ -263,7 +284,7 @@ export default function PremiumAdsEditor() {
         hasLink: e.target.parentNode.tagName === 'A'
       });
       
-      // Add visual feedback
+      // Add visual feedback (but this will be removed before saving)
       document.querySelectorAll('.content-editor img').forEach(img => {
         img.style.outline = 'none';
       });
@@ -421,7 +442,7 @@ export default function PremiumAdsEditor() {
       a.appendChild(imgElement);
     }
     
-    // Update visual feedback
+    // Update visual feedback (will be cleaned before saving)
     imgElement.style.outline = '2px solid #10b981';
     imgElement.style.outlineOffset = '2px';
     
@@ -476,7 +497,7 @@ export default function PremiumAdsEditor() {
       // Replace anchor with just the image
       anchorElement.parentNode.replaceChild(imgElement, anchorElement);
       
-      // Update visual feedback
+      // Update visual feedback (will be cleaned before saving)
       imgElement.style.outline = '2px solid #3b82f6';
       imgElement.style.outlineOffset = '2px';
       
@@ -582,11 +603,11 @@ export default function PremiumAdsEditor() {
       a.appendChild(img);
       elementToInsert = a;
       
-      // Add visual feedback
+      // Add visual feedback (will be cleaned before saving)
       img.style.outline = '2px solid #10b981';
       img.style.outlineOffset = '2px';
     } else {
-      // Add visual feedback for unlinked image
+      // Add visual feedback for unlinked image (will be cleaned before saving)
       img.style.outline = '2px solid #3b82f6';
       img.style.outlineOffset = '2px';
     }
