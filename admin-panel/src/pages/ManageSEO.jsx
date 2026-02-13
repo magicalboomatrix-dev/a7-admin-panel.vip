@@ -4,6 +4,9 @@ const siteOptions = [
   { label: "A3 Satta", value: "a3satta.vip" },
   { label: "A7 Satta", value: "a7satta.vip" },
   { label: "B7 Satta", value: "b7satta.vip" },
+  { label: "Desawar Satta", value: "desawar-satta.com" },
+
+  
 ];
 import api from "../utils/api";
 
